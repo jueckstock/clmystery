@@ -86,15 +86,70 @@ This limitation in novelty is intentional: the original is well-designed to teac
 
 ### Seed Files
 
-We will use the existing `people`, `vehicles`, and `memberships/` files as-is.
+We cannot use the existing `people`, `vehicles`, and `memberships/` files as-is (as-are?).
+The data is too well randomized: the only license-plate numbers that could provide ambiguity and require membership matching appear to be specially-crafted for the "Jeremy Bowers" perpetrator from the original mystery.
+
+Instead, we will harvest the following data from the original seed files:
+
+* first names (male), with popularity count
+* first names (female), with popularity count
+* last names (unified), with popularity count
+* car make
+* car color
+* street names (the actual street files; not all the street names in `people` actually had street files)
+* member organization names
+
+We will use actual male/female average height/weight stats from WolframAlpha to generate heights/weights.
+
+Ages can be simply randomly generated uniformly from 18 - 80 (not realistic, but whatever).
+
+### World Generation Problems
+
+The fundamental problem is generating a set of people, vehicle registrations, and memberships that requires the user to perform _all of_ but _no more than_ the original steps (get clues, find and interview witness, sort through vehicle registrations, cross-reference membership lists) to unambiguously identify a murderer.
+
+To recap the clues given the player:
+
+* perp _sex_ (2 possibilies)
+* perp relative _height_ (3 possibilities: tall, short, medium-height)
+* perp memberships; given the 11 organizations in the original game, there are
+    * 2048 possible combinations of membership (from no memberships at all, to membership in all 11)
+    * 55 possible combinations of simple dual-membership (all citizens are members of exactly 2)
+    * 165 combinations of exactly-3-orgs
+    * 330 combinations of exactly-4-orgs
+* perp car make (16 possibilies)
+* perp car color (11 possiblities)
+* perp's license plate prefix (3 characters) and suffix (1 character)
+    * this was where the original author doctored the data---only a small set of license plate numbers manually constructed around the perp had cardinality over 1
+    * I propose generating license plates in a 4-letter/3-digit scheme where the first 2 letters are deterministically generated from the make, the next 2 from the color, and the 3 digits are generated randomly but with restrictions (e.g., the last digit must be odd) as needed to tune the expected cardinality of the vehicle-registration-search output set; an odd-even-odd digit policy would allow 125 distinct license plates for each make/color combination
+    * following the 3-pre/1-post pattern of clue, this would mean only 5 possibilities beyond the fixed make/color portion
+
+We would like the vehicle registration search step to generate a list of at least 2 and no more than 5 candidates (which the player must disambiguate by cross-referencing membership lists).
+At the same time, the membership policies and population size must be such that simply having the perp's membership cards (and sex/height) is not sufficient for identification.
+
+To make sure the user should get 2-5 people of the right sex/height/car-color/car-make/final-tag-digit, we need `N *(2 * 3 * 11 * 16 * 5)`, where `N` is our safety factor which must be greater than 2.
+
+With `N = 3`, this means a population size of **15,840** (about 3 times the original CLM world), and 3 expected candidate perps after the vehicle registration search.  *Any* number of memberships would be sufficient to resolve this ambiguity, probably (and we should do a sanity check to make sure the generated case does not disappoint).
+
+But we need to make sure that we don't allow an advanced user to bypass the witness hunt/vehicle search entirely by simply identifying all, e.g., tall males who are members of exactly AAA, Delta SkyMiles, Terminal City Library, and the Museum of Bash History (the original mystery does in fact ensure this property).
+
+To keep things simple, lets go with `M = 3` memberships (randomly selected from the 11 orgs; that's 165 possible combinations of membership) for all citizens.
+
+### World Generation Procedure
+
+* load the seed data from the files listed above
+* compute the population size using the `N` formula above (using the cardinality of the car make/color sets)
+* generate that many "persons" (with registered vehicles) using the seed/stat data
+* pick the murderer (see below)
+* pick the witness (see below)
+* generate the world files and clue files (see below)
 
 ### Perp Selection
 
-We start by selecting the murderer from the population of `people` in such a way that a single, unambiguous suspect can be identified based on sex, approximate height (short, medium, tall), car registration (make/color/license-plate fragment), and membership set.
+There shouldn't be any special steps for perp selection given our carefully-parameterized population size and world generation.  Just pick someone.  Anyone.
 
 ### Witness Selection
 
-We progress to selecting a "witness" from `people` in such a way that the witness's first name will yield multiple hits in `people`, at least two of which match the given sex.
+For an ideal experience, we want the witness to have a first name that generates 4-ish hits in `people`, at least 2 of whom are the correct sex and thus must both be looked up/interviewed.
 
 ### Clue Generation
 
