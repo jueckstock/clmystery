@@ -147,6 +147,9 @@ To keep things simple, lets go with `M = 3` memberships (randomly selected from 
 
 There shouldn't be any special steps for perp selection given our carefully-parameterized population size and world generation.  Just pick someone.  Anyone.
 
+We do, however, cover our bases and double-check that we get non-empty (and non-huge) sets of near-match candidates based on membership sets and tag matches.
+If we don't, just try generating/picking again...
+
 ### Witness Selection
 
 For an ideal experience, we want the witness to have a first name that generates 4-ish hits in `people`, at least 2 of whom are the correct sex and thus must both be looked up/interviewed.
@@ -159,3 +162,98 @@ We then generate a number of files to fill out the experience:
 * templated INTERVIEW files for the witness and any "red herring" ambiguous matches; random gibberish interview files to make the true interviews hard to find automagically
 * street files for each person in `people`, with dictionary word salad on each line except for the witness/red-herring lines, which reference the appropriate interview files
 
+## Generation Details
+
+### The `crimescene` File
+
+The format of the file is a sequence of 1000 "Crime Scene Report" blocks in the following format:
+
+```
+*******
+Crime Scene Report #<RANDOM_DIGITS>
+********
+
+<TEXT BODY>
+
+
+```
+
+where `<TEXT BODY>` is _either_ a random selection from a seed text (Alice in Wonderland in the original mystery) _or_ a line starting with `CLUE: ` and containing one of the preseeded clues given the player to start the investigation.
+
+### CLUE formats
+
+The player is given 3 clues in `crimescene`:
+
+* CLUE 1: `Footage from an ATM security camera is blurry but shows that the perpetrator is a <MURDERER_HEIGHT_CLASS> <MURDER_SEX_FORMAL>, <HEIGHT_CLASS_DESCRIPTION>.`
+* CLUE 2: `Found a wallet believed to belong to the killer: no ID, just loose change and membership cards for <COMMA_SEPARATED_LIST_OF_MEMBERSHIP_ORG_NAMES>.  The cards are totally untraceable and have no name, for some reason.`
+* CLUE 3: `Questioned the barista at the local coffee shop. He said a <WITNESS_SEX_INFORMAL> left right before they heard the shots.  The name on <WITNESS_POS_PRONOUN> latte was <WITNESS_FIRST_NAME>; <WITNESS_SUB_PROJOUN> had <WITNESS_HAIR_COLOR> <WITNESS_HAIR_STYLE> and a <WITNESS_NATIONALITY> accent.`
+
+### Interview Files
+
+The following interview files must be generated:
+
+* one for the murderer, saying:
+    ```
+    Home appears to be empty, no answer at the door.
+
+    After questioning neighbors, appears that the occupant may have left for a trip recently.
+
+    Considered a suspect until proven otherwise, but would have to eliminate other suspects to confirm.
+    ```
+
+* one for the cafe witness, saying:
+    ```
+    Interviewed <WITNESS_TITLE> at 2:04pm.  Witness stated that <WITNESS_SUB_PRONOUN> did not see anyone <WSP> could identify as the shooter, that <WSP> ran away as soon as the shots were fired.
+
+    However, <WSP> reports seeing the car that fled the scene.  Describes it as a <PERP_CAR_COLOR> <PERP_CAR_MAKE>, with a license plate that starts with "<PERP_TAG_PREFIX>" and ends with "<PERP_TAG_SUFFIX>."
+    ```
+
+* one for each cafe witness red herring, saying either:
+    ```
+    <PERSON_TITLE> is clearly not a <WITNESS_SEX_INFORMAL>.  Not the witness from the cafe.
+    ```
+
+    or
+
+    ```
+    <PERSON_TITLE> has <PERSON_HAIR_COLOR> and a <PERSON_NATIONALITY> accent.  Not the witness from the cafe.
+    ```
+
+    depending on if the red-herring's sex matches or mismatches the witness.  Note that we don't actually establish hair color/nationality for all the red herrings in advance: we just generate one that _doesn't_ match the witness's on the fly.
+
+* one for each tag-match murderer-candidate (NOT including the actual murderer) saying
+    ```
+    <PERSON_TITLE> <COINCIDENCE>, but has never been a member of <ORG_NAME> and has a solid alibi for the morning in question. Not considered a suspect.
+    ```
+    where `ORG_NAME` is one of the perp's memberships that the candidate does not share and
+    where `COINCIDENCE` is a phrase randomly selected from a list of plausible and/or humorous false-flag suspicions (e.g., "knew the victim", "lives nearby", "looks as shady as a rack of sunglasses", etc.)
+
+* one for each membership-match murderer-candidate (NOT including the actual murderer) saying
+    ```
+    <PERSON_TITLE> <COINCIDENCE>, but has never owned a car matching the witness's description and has a solid alibi for the morning in question. Not considered a suspect.
+    ```
+
+* and as many gibberish/filler-stuffed fake interviews as it takes to make 500 total files
+
+### Street Files
+
+Each person in the population is assigned a street address (a street name and line number).
+The street name is simply picked from the seed list when we generate the person.
+We can then group the people by street and generate their line numbers while generating that street file by:
+
+* writing 50-100 (randomly selected) lines of junk at the start of the street file
+* writing either (a) random junk or (b) and interview reference, if available, for each person on that street
+* padding out the file by inserting 2-5 random junk lines between each person
+
+The "random junk" here is a chain of words from our English word list.
+
+### Membership Files
+
+We simply create one file per organization with its members names (sorted alphabetically) written one per line.
+
+## Acknowledgements/Credits
+
+* Noah Veltman's original [Command Line Murders mystery game](https://github.com/veltman/clmystery) (idea, structure, person/street names)
+* Project Gutenberg's [*The Adventures of Sherlock Holmes*](https://gutenberg.org/files/1661/1661-0.txt) (seed text for file filler)
+* https://www.ef.com/wwen/english-resources/english-grammar/nationalities/ (adjectival nationality names)
+* https://www.ef.com/wwen/english-resources/english-vocabulary/top-3000-words/ (most common English words, for generating short lines of gibberish for street files)
