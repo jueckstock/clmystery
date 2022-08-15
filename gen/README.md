@@ -120,15 +120,17 @@ To recap the clues given the player:
 * perp car color (11 possiblities)
 * perp's license plate prefix (3 characters) and suffix (1 character)
     * this was where the original author doctored the data---only a small set of license plate numbers manually constructed around the perp had cardinality over 1
-    * I propose generating license plates in a 4-letter/3-digit scheme where the first 2 letters are deterministically generated from the make, the next 2 from the color, and the 3 digits are generated randomly but with restrictions (e.g., the last digit must be odd) as needed to tune the expected cardinality of the vehicle-registration-search output set; an odd-even-odd digit policy would allow 125 distinct license plates for each make/color combination
-    * following the 3-pre/1-post pattern of clue, this would mean only 5 possibilities beyond the fixed make/color portion
+    * I first thought of generating license plates in a 4-letter/3-digit scheme where the first 2 letters are deterministically generated from the make, the next 2 from the color, and the 3 digits are generated randomly but with restrictions (e.g., the last digit must be odd) as needed to tune the expected cardinality of the vehicle-registration-search output set; an odd-even-odd digit policy would allow 125 distinct license plates for each make/color combination. following the 3-pre/1-post pattern of clue, this would mean only 5 possibilities beyond the fixed make/color portion. This worked great in terms of easily generating a consistent population/mystery, but ended up destroying the challenge of grepping for multi-line-record matches (one of the key breakthroughs in CLI skills).
+    * Take 2: go to a 3-alpha/4-digit tag generation scheme, but artificially limit things by having the 3-alpha prefix drawn from a pool of 5 prefixes randomly generated at the start of world-generation and keep the even/odd/even/odd digit distribution. This would produce only 25 possibilities beyond sex/height/car-color/car-make and could keep the population size sane.
 
 We would like the vehicle registration search step to generate a list of at least 2 and no more than 5 candidates (which the player must disambiguate by cross-referencing membership lists).
 At the same time, the membership policies and population size must be such that simply having the perp's membership cards (and sex/height) is not sufficient for identification.
 
-To make sure the user should get 2-5 people of the right sex/height/car-color/car-make/final-tag-digit, we need `N *(2 * 3 * 11 * 16 * 5)`, where `N` is our safety factor which must be greater than 2.
+To make sure the user should get 2-5 people of the right sex/height/car-color/car-make/prefix-cluster/final-tag-digit, we need `N *(2 * 3 * 11 * 16 * 5 * 5)`, where `N` is our safety factor, which must be greater than 2.
 
-With `N = 3`, this means a population size of **15,840** (about 3 times the original CLM world), and 3 expected candidate perps after the vehicle registration search.  *Any* number of memberships would be sufficient to resolve this ambiguity, probably (and we should do a sanity check to make sure the generated case does not disappoint).
+With `N = 3`, this means a population size of **79,200** (about 16 times the original CLM world), and 3 expected candidate perps after the vehicle registration search.  *Any* number of memberships would be sufficient to resolve this ambiguity, probably (and we should do a sanity check to make sure the generated case does not disappoint).
+
+**Unfortunately**, all of the above math starts to founder when _names_ enter the picture and we need to select a witness whose first name gives a nice number of first/last name hits.  So I am fudging the population size back down to **15840**, which seems to work well with our database.
 
 But we need to make sure that we don't allow an advanced user to bypass the witness hunt/vehicle search entirely by simply identifying all, e.g., tall males who are members of exactly AAA, Delta SkyMiles, Terminal City Library, and the Museum of Bash History (the original mystery does in fact ensure this property).
 

@@ -15,11 +15,12 @@ from typing import Sequence, Mapping
 SAFETY_FACTOR = 3
 NUM_REQUIRED_MEMBERSHIPS = 3
 NUM_INTERVIEW_FILES = 500
+NUM_TAG_PREFIXEN = 30
 
 # factors for calculating odds/required base population
 NUM_SEXES = 2
 NUM_HEIGHT_CLASSES = 3
-NUM_ODD_DIGITS = 5
+NUM_DIGIT_VALUES = 5
 
 # male/female height means/stds from WolframAlpha (2022-08-12)
 MALE_HEIGHT_MEAN = 66 # inches (5'6")
@@ -190,16 +191,17 @@ def main(argv):
     text_filler = SeedText(os.path.join(args.seed_dir, "holmes.txt"))
 
     # compute population size as a function of our parameters and sanity check it
-    popsize = SAFETY_FACTOR * (NUM_SEXES * NUM_HEIGHT_CLASSES * NUM_ODD_DIGITS * len(car_colors) * len(car_makes))
+    popsize = SAFETY_FACTOR * (NUM_SEXES * NUM_HEIGHT_CLASSES * len(car_colors) * len(car_makes) * NUM_DIGIT_VALUES)
     if (popsize / (NUM_SEXES * NUM_HEIGHT_CLASSES * math.comb(len(member_orgs), NUM_REQUIRED_MEMBERSHIPS))) < 2:
         raise ValueError("the SAFETY_FACTOR is too low or something is messed up with our seed files")
+    #print(popsize)
     
     # compute male/female skew and generate the base population
     nfemales = math.floor(popsize * 0.51)
     nmales = popsize - nfemales
     pop = []
-    fname_index = defaultdict(lambda : ([], [])) # indices used later for witness vetting
-    lname_index = defaultdict(lambda : ([], []))
+    fname_index = defaultdict(list) # indices used later for witness vetting
+    lname_index = defaultdict(list)
     for i in range(nmales):
         p = Person(
             random.choice(male_names),
@@ -207,8 +209,8 @@ def main(argv):
             "M",
             random.choice(street_names)
         )
-        fname_index[p.first_name][0].append(p)
-        lname_index[p.last_name][0].append(p)
+        fname_index[p.first_name].append(p)
+        lname_index[p.last_name].append(p)
         pop.append(p)
     for i in range(nfemales):
         p = Person(
@@ -217,8 +219,8 @@ def main(argv):
             "F",
             random.choice(street_names)
         )
-        fname_index[p.first_name][1].append(p)
-        lname_index[p.last_name][1].append(p)
+        fname_index[p.first_name].append(p)
+        lname_index[p.last_name].append(p)
         pop.append(p)
     
     # randomize the order of the population so listings don't have all males then all females
@@ -232,22 +234,23 @@ def main(argv):
             member_map[org].append(p)
     
     # generate cars ("a chicken in every pot and two cars in every garage...")
-    color_letters = string.ascii_uppercase
-    make_letters = color_letters[::-1]
+    #color_letters = string.ascii_uppercase
+    #make_letters = color_letters[::-1]
     tag_history = set()
+    max_tag_set_size = NUM_TAG_PREFIXEN * 10000
+    prefix_set = [''.join(random.sample(string.ascii_uppercase, 3)) for _ in range(NUM_TAG_PREFIXEN)]
     for p in pop:
-        color_index = random.randrange(len(car_colors))
-        make_index = random.randrange(len(car_makes))
         safe_tag = False
         while not safe_tag:
-            tag_prefix = (color_letters[(color_index + 1) % 26] + color_letters[(color_index * 2) % 26] + 
-                make_letters[(make_index + 1) % 26] + make_letters[(make_index * 2) % 26])
-            tag_suffix = format(random.randrange(1000), "03")
+            tag_prefix = random.choice(prefix_set)
+            tag_suffix = format(random.randrange(10000), "04")
             tag = tag_prefix + tag_suffix
             if tag not in tag_history:
                 tag_history.add(tag)
                 safe_tag = True
-        p.vehicle = Vehicle(car_makes[make_index], car_colors[color_index], tag)
+            elif len(tag_history) == max_tag_set_size:
+                raise ValueError("ran out of license plates! need to retune the prefix set size...")
+        p.vehicle = Vehicle(random.choice(car_makes), random.choice(car_colors), tag)
     
     # pick the murderer!
     good_murderer = False
@@ -265,9 +268,10 @@ def main(argv):
             sex_match = (p.sex == murderer.sex)
             height_match = (p.height.adjective() == murderer.height.adjective())
             tag_match = (p.vehicle.tag[:3] == murderer.vehicle.tag[:3]) and (p.vehicle.tag[-1] == murderer.vehicle.tag[-1])
+            car_match = (p.vehicle.make == murderer.vehicle.make) and (p.vehicle.color == murderer.vehicle.color)
             members_match = (p.memberships == murderer.memberships)
             
-            if sex_match and height_match and tag_match:
+            if sex_match and height_match and tag_match and car_match:
                 sanity_tag_set.append(p)
             if sex_match and height_match and members_match:
                 sanity_member_set.append(p)
@@ -286,37 +290,41 @@ def main(argv):
         good_murderer = True
 
     #print("murderer:", murderer)
-    #rint(f"{len(sanity_tag_set)} extra tag search suspects")
-    #rint(f"{len(sanity_member_set)} pre-tag search suspects matching memberships")
+    #print(f"{len(sanity_tag_set)} extra tag search suspects")
+    #print(f"{len(sanity_member_set)} pre-tag search suspects matching memberships")
+
+    #with open("junk_people", "wt", encoding="utf-8") as fd:
+    #    for p in pop:
+    #        print(p.full_name, p.sex, p.age, p.street, sep="\t", file=fd)
 
     # pick the witness (in a sanity-vetted way, to ensure good results for the witness search)
     good_witness = False
     while not good_witness:
+        #print("pick witness...")
         witness = random.choice(pop)
         if witness is murderer: # just no...
             continue
 
-        male_name_clashes = (set(fname_index[witness.first_name][0]) | set(lname_index[witness.first_name][0])) - {witness}
-        female_name_clashes = (set(fname_index[witness.first_name][1]) | set(lname_index[witness.first_name][1])) - {witness}
-        if witness.sex == "M":
-            same_clash = len(male_name_clashes)
-            diff_clash = len(female_name_clashes)
-        else:
-            same_clash = len(female_name_clashes)
-            diff_clash = len(male_name_clashes)
+        red_herrings = (set(fname_index[witness.first_name]) | set(lname_index[witness.first_name])) - {witness}
+        same_clash = diff_clash = 0
+        for rh in red_herrings:
+            if rh.sex == witness.sex:
+                same_clash += 1
+            else:
+                diff_clash += 1
 
         if (0 < same_clash < 3) and (0 < diff_clash < 6):
             good_witness = True
-            red_herrings = male_name_clashes | female_name_clashes
         #else:
-        #    print(witness, same_clash, diff_clash)
+            #print(witness, same_clash, diff_clash)
+            #for rh in red_herrings:
+            #    print('\t', rh)
     
     #print("witness:", witness)
     #print('-'*40)
-    #for p in male_name_clashes:
+    #for p in red_herrings:
     #    print(p)
-    #for p in female_name_clashes:
-    #    print(p)
+    #print()
 
     # add a little color/flair to the clues about the witness
     witness_hair_color = random.choice(hair_colors)
