@@ -6,10 +6,18 @@ import argparse
 import math
 import os
 import random
+import shutil
 import string
 import sys
 from collections import defaultdict, namedtuple
 from typing import Sequence, Mapping
+
+# static files to copy as-is from source to destination dir
+STATIC_FILES = [
+    "LICENSE.md", "README.md", "instructions",
+    "hint1", "hint2", "hint3", "hint4", "hint5", "hint6", "hint7", "hint8",
+]
+
 
 # tuning parameters
 SAFETY_FACTOR = 3
@@ -528,6 +536,10 @@ Weight: {p.weight} lbs
         with open(os.path.join(args.output_dir, "memberships", org.replace(" ", "_")), "wt", encoding="utf-8") as fd:
             for m in members:
                 print(m.full_name, file=fd)
+    
+    # _FINALLY_, copy in the static files as-is
+    for name in STATIC_FILES:
+        shutil.copy(os.path.join(args.seed_dir, name), os.path.join(args.output_dir, name))
 
 
 if __name__ == "__main__":
